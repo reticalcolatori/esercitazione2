@@ -1,0 +1,11 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - MultiplePutClient",
+            "request": "launch",
+            "mainClass": "com.MultiplePutClient",
+            "projectName": "Esercitazione2"
+        }
+    ]
+}

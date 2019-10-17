@@ -1,0 +1,8 @@
+Iterazione con utente per multiple put client: guarda bene slide 6
+
+Nel server fare un monitor semplice per la scrittura concorrente di file nel direttorio:
+Devo creare il monitor solo per il nome dei file in scrittura.
+
+
+Partizione client del comando esegui()
+
