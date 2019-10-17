@@ -183,7 +183,9 @@ public class MultiplePutClient {
 						e.printStackTrace();
 						continue;
 					}
-
+					// La nostra non è una scelta (furba tra l'altro), ma è proprio
+					// una specifica: "Il Multiple put viene effettuato file
+					// per file con assenso del server per ogni file" !!
 					if (RESULT_OK.equalsIgnoreCase(risposta)) {
 						System.out.println("File " + file.getName() + " caricato.");
 					} else {
