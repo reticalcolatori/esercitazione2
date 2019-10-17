@@ -2,6 +2,7 @@ package com;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -52,20 +53,18 @@ public class MultiplePutClient {
 	}
 
 	// Variabili per il direttorio.
-	private final String dirname;
-	private final File dirFile;
-	private final Path dirPath;
+	
 	private final int dimensioneSoglia;
 
 	private final InetAddress serverAddress;
 	private final int serverPort;
 
-	public MultiplePutClient(String serverAddress, int serverPort, String dirname, int dimensioneSoglia)
+	public MultiplePutClient(String serverAddress, int serverPort, int dimensioneSoglia)
 			throws IllegalArgumentException, IOException {
-		this(InetAddress.getByName(serverAddress), serverPort, dirname, dimensioneSoglia);
+		this(InetAddress.getByName(serverAddress), serverPort, dimensioneSoglia);
 	}
 
-	public MultiplePutClient(InetAddress serverAddress, int serverPort, String dirname, int dimensioneSoglia)
+	public MultiplePutClient(InetAddress serverAddress, int serverPort, int dimensioneSoglia)
 			throws IllegalArgumentException, IOException {
 		this.serverAddress = serverAddress;
 		this.serverPort = serverPort;
@@ -74,27 +73,31 @@ public class MultiplePutClient {
 		if (!isPortValid(serverPort))
 			throw new IllegalArgumentException("server port non valida");
 
-		this.dirname = dirname;
 		this.dimensioneSoglia = dimensioneSoglia;
 
-		if (dimensioneSoglia < 0)
+		if (dimensioneSoglia <= 0)
 			throw new IllegalArgumentException("dimensioneSoglia non valida (<0)");
 
-		this.dirFile = new File(dirname);
-		this.dirPath = Paths.get(dirFile.toURI());
-
-		// Controllo directory.
-		if (!dirFile.isDirectory())
-			throw new IOException("Directory non valida");
 	}
 
-	public void esegui() {
+	public void esegui(String dirname) {
+
 		// Apro la directory e faccio la ls.
+		File dirFile = new File(dirname);
+		Path dirPath = Paths.get(dirFile.toURI());
+
+		// Controllo directory.
+		if (!dirFile.isDirectory()){
+			System.out.println("Directory non valida");
+			return;
+		}
+
+		// Estraggo i file contenuti nella directory	
 		File[] files = dirFile.listFiles();
 
 		// Directory vuota non devo fare nulla.
 		if (files.length == 0) {
-			System.out.println("Directory vuota, non eseguo traferimenti.");
+			System.out.println("Directory vuota, non eseguo trasferimenti.");
 			return;
 		}
 
@@ -125,7 +128,7 @@ public class MultiplePutClient {
 			// connessione.ensione minima
 			long dimFile = file.length();
 
-			if (dimFile >= dimensioneSoglia) {
+			if (dimFile > dimensioneSoglia) {
 				// Posso inviare la richesta
 				try {
 					socketDataOut.writeUTF(file.getName());
@@ -165,7 +168,6 @@ public class MultiplePutClient {
 							socketOut.write(tmpByte);
 
 					} catch (FileNotFoundException ex) {
-						// Impossibile già verificato.
 						System.exit(FILE_NOT_EXISTS_ERR);
 					} catch (IOException ex) {
 						// Perché esco:
@@ -208,24 +210,41 @@ public class MultiplePutClient {
 	}
 
 	public static void main(String[] args) {
-		// MultiplePutClient serverAddress serverPort dirname dimSoglia
+		// MultiplePutClient serverAddress serverPort dimSoglia
 
 		if(args.length != 4) {
-			System.err.println("usage java MultiplePutClient serverAddress serverPort dirname dimSoglia");
+			System.err.println("usage java MultiplePutClient serverAddress serverPort dimSoglia");
 			System.exit(ARGS_ERR);
 		}
 
 		MultiplePutClient client = null;
 
 		try {
-			client = new MultiplePutClient(args[0], Integer.parseInt(args[1]), args[2], Integer.parseInt(args[3]));
+			client = new MultiplePutClient(args[0], Integer.parseInt(args[1]), Integer.parseInt(args[3]));
 		} catch (IllegalArgumentException | IOException e) {
 			e.printStackTrace();
 			System.exit(ARGS_ERR);
 		}
 
 		//Posso avviare il client
-		client.esegui();
+		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+		String dirname = "";
+		try {
+			while ((dirname = in.readLine()) != null) {
+				client.esegui(dirname);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(IO_ERR);
+		}
+
+		//chiudo il canale di lettura da stdin
+		try {
+			in.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		System.exit(0);
 	}
 	
 	
