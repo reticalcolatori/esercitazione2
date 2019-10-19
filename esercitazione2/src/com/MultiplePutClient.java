@@ -15,6 +15,13 @@ import java.net.Socket;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+
+//Risassuntino per la presentazione:
+//1) Controllo argomenti
+//2) Istanzio oggetto client
+//3) REPL in cui chiedo all'utente il direttorio da copiare.
+//   Durante il REPL viene gestita una connessione TCP.
+
 public class MultiplePutClient {
 
 	private static final int SOCKET_CONN_ERR = 1; // Connessione non andata a buon fine.
@@ -198,10 +205,10 @@ public class MultiplePutClient {
 
 		// Ho finito di inviare i file: chiudo la connessione.
 		try {
-			socket.shutdownOutput();
-			System.out.println(socketDataIn.readUTF());
-			socket.shutdownInput();
-			socket.close();
+			socket.shutdownOutput();						//Non invio più nulla.
+			System.out.println(socketDataIn.readUTF());		//Attendo una conferma chiusura.
+			socket.shutdownInput();							//Chiudo l'input.
+			socket.close();									//Rilascio risorse.
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(IO_ERR);

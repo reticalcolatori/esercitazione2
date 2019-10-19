@@ -10,6 +10,16 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+//Risassuntino per la presentazione:
+//Finché non arriva EOF, il cliente mi invierà dei nomi file:
+//1) Controllo sull'esistenza del file
+//2) Lettura della dimensione.
+//3) Scrivo il file che mi passa il cliente.
+//4) Invio ACK
+//Alla fine quando arriva EOF:
+//1) Chiudo prima input(non ricevo più nulla)
+//2) Chiudo l'output.
+
 public class ServiceChild extends Thread {
 
     // Risposte da inviare al client
@@ -45,7 +55,9 @@ public class ServiceChild extends Thread {
             outSocket = new DataOutputStream(client.getOutputStream());
         } catch (IOException e) {
             System.err.println("Impossibile estrarre canali di comunicazione dalla socket!");
-            System.exit(SOCK_ERR);
+            //Non esco perchè ho una grossa perdita.
+            //Meglio che fallisca il thread che l'intero processo.
+            //System.exit(SOCK_ERR);
         }
 
         try {
@@ -80,11 +92,26 @@ public class ServiceChild extends Thread {
         } catch (IOException e) {
             System.err.println("Errore nella lettura del nome del file!");
             e.printStackTrace();
-            System.exit(NET_ERR);
+            //Non esco perchè ho una grossa perdita.
+            //Meglio che fallisca il thread che l'intero processo.
+            //System.exit(NET_ERR);
         }
 
-        client.close();
-        System.exit(0);
+        try {
+            client.shutdownInput();         //Posso chiudere l'input non ricevo più nulla.
+            outSocket.writeUTF(RESULT_OK);  //Invio una conferma chiusura.
+            client.shutdownOutput();        //Chiudo l'output.
+            client.close();                 //Rilascio risorse.
+        } catch (IOException e) {
+            e.printStackTrace();
+            //Non esco perchè ho una grossa perdita.
+            //Meglio che fallisca il thread che l'intero processo.
+            //System.exit(NET_ERR);
+        }
+
+        //Se faccio la exit mi esce tutto il processo.
+        //Basta lasciare il metodo così termina da solo il thread.
+        //System.exit(0);
     }
 
 }
