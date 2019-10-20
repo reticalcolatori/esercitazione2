@@ -24,235 +24,235 @@ import java.nio.file.Paths;
 
 public class MultiplePutClient {
 
-	private static final int SOCKET_CONN_ERR = 1; // Connessione non andata a buon fine.
-	private static final int FILE_NOT_EXISTS_ERR = 2; // File non trovato
-	private static final int IO_ERR = 3; // Errore IO
-	private static final int ARGS_ERR = 4; // Errore negli argomenti
+    private static final int SOCKET_CONN_ERR = 1; // Connessione non andata a buon fine.
+    private static final int FILE_NOT_EXISTS_ERR = 2; // File non trovato
+    private static final int IO_ERR = 3; // Errore IO
+    private static final int ARGS_ERR = 4; // Errore negli argomenti
 
-	// Invocazione client:
-	// MultiplePutClient serverAddress serverPort dirname dimSoglia
+    // Invocazione client:
+    // MultiplePutClient serverAddress serverPort dirname dimSoglia
 
-	// Il client trasferisce solo se il file supera una dimensione minima.
-	// Protocollo richiesta put file:
-	// nomefile
+    // Il client trasferisce solo se il file supera una dimensione minima.
+    // Protocollo richiesta put file:
+    // nomefile
 
-	// In ricezione ho una conferma: se positiva posso trasferire il file.
-	// L'esito è positivo solo se nel direttorio corrente del server non è presente
-	// un file con nome uguale.
-	// Il server rimane sullo stesso direttorio.
+    // In ricezione ho una conferma: se positiva posso trasferire il file.
+    // L'esito è positivo solo se nel direttorio corrente del server non è presente
+    // un file con nome uguale.
+    // Il server rimane sullo stesso direttorio.
 
-	// Invio la lunghezza
-	// lunghezza(long)
+    // Invio la lunghezza
+    // lunghezza(long)
 
-	// Il server invia un ACK
+    // Il server invia un ACK
 
-	// Quando ho finito di inviare tutti i file (anche 0) faccio la shutdown di
-	// output.
-	// Il server invierà una conferma.
+    // Quando ho finito di inviare tutti i file (anche 0) faccio la shutdown di
+    // output.
+    // Il server invierà una conferma.
 
-	// Risposte dal server
-	private static final String RESULT_ATTIVA = "attiva";
-	private static final String RESULT_SALTA_FILE = "salta file";
-	private static final String RESULT_OK = "OK";
+    // Risposte dal server
+    private static final String RESULT_ATTIVA = "attiva";
+    private static final String RESULT_SALTA_FILE = "salta file";
+    private static final String RESULT_OK = "OK";
 
-	private static boolean isPortValid(int port) {
-		return 1024 < port && port < 0x10000;
-	}
+    private static boolean isPortValid(int port) {
+        return 1024 < port && port < 0x10000;
+    }
 
-	// Variabili per il direttorio.
-	
-	private final int dimensioneSoglia;
+    // Variabili per il direttorio.
 
-	private final InetAddress serverAddress;
-	private final int serverPort;
+    private final int dimensioneSoglia;
 
-	public MultiplePutClient(String serverAddress, int serverPort, int dimensioneSoglia)
-			throws IllegalArgumentException, IOException {
-		this(InetAddress.getByName(serverAddress), serverPort, dimensioneSoglia);
-	}
+    private final InetAddress serverAddress;
+    private final int serverPort;
 
-	public MultiplePutClient(InetAddress serverAddress, int serverPort, int dimensioneSoglia)
-			throws IllegalArgumentException, IOException {
-		this.serverAddress = serverAddress;
-		this.serverPort = serverPort;
+    public MultiplePutClient(String serverAddress, int serverPort, int dimensioneSoglia)
+            throws IllegalArgumentException, IOException {
+        this(InetAddress.getByName(serverAddress), serverPort, dimensioneSoglia);
+    }
 
-		// Controllo porta.
-		if (!isPortValid(serverPort))
-			throw new IllegalArgumentException("server port non valida");
+    public MultiplePutClient(InetAddress serverAddress, int serverPort, int dimensioneSoglia)
+            throws IllegalArgumentException, IOException {
+        this.serverAddress = serverAddress;
+        this.serverPort = serverPort;
 
-		this.dimensioneSoglia = dimensioneSoglia;
+        // Controllo porta.
+        if (!isPortValid(serverPort))
+            throw new IllegalArgumentException("server port non valida");
 
-		if (dimensioneSoglia <= 0)
-			throw new IllegalArgumentException("dimensioneSoglia non valida (<0)");
+        this.dimensioneSoglia = dimensioneSoglia;
 
-	}
+        if (dimensioneSoglia <= 0)
+            throw new IllegalArgumentException("dimensioneSoglia non valida (<0)");
 
-	public void esegui(String dirname) {
+    }
 
-		// Apro la directory e faccio la ls.
-		File dirFile = new File(dirname);
-		Path dirPath = Paths.get(dirFile.toURI());
+    public void esegui(String dirname) {
 
-		// Controllo directory.
-		if (!dirFile.isDirectory()){
-			System.out.println("Directory non valida");
-			return;
-		}
+        // Apro la directory e faccio la ls.
+        File dirFile = new File(dirname);
+        Path dirPath = Paths.get(dirFile.toURI());
 
-		// Estraggo i file contenuti nella directory	
-		File[] files = dirFile.listFiles();
+        // Controllo directory.
+        if (!dirFile.isDirectory()) {
+            System.out.println("Directory non valida");
+            return;
+        }
 
-		// Directory vuota non devo fare nulla.
-		if (files.length == 0) {
-			System.out.println("Directory vuota, non eseguo trasferimenti.");
-			return;
-		}
+        // Estraggo i file contenuti nella directory
+        File[] files = dirFile.listFiles();
 
-		Socket socket = null;
-		BufferedInputStream socketIn = null;
-		BufferedOutputStream socketOut = null;
+        // Directory vuota non devo fare nulla.
+        if (files.length == 0) {
+            System.out.println("Directory vuota, non eseguo trasferimenti.");
+            return;
+        }
 
-		DataInputStream socketDataIn = null;
-		DataOutputStream socketDataOut = null;
+        Socket socket = null;
+        BufferedInputStream socketIn = null;
+        BufferedOutputStream socketOut = null;
 
-		String risposta = null;
+        DataInputStream socketDataIn = null;
+        DataOutputStream socketDataOut = null;
 
-		// Apro la connessione
-		try {
-			socket = new Socket(serverAddress, serverPort);
-			socketIn = new BufferedInputStream(socket.getInputStream());
-			socketOut = new BufferedOutputStream(socket.getOutputStream());
+        String risposta = null;
 
-			socketDataIn = new DataInputStream(socketIn);
-			socketDataOut = new DataOutputStream(socketOut);
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.exit(SOCKET_CONN_ERR);
-		}
+        // Apro la connessione
+        try {
+            socket = new Socket(serverAddress, serverPort);
+            socketIn = new BufferedInputStream(socket.getInputStream());
+            socketOut = new BufferedOutputStream(socket.getOutputStream());
 
-		for (File file : files) {
-			// Per ogni file verifico la dimHo finito di inviare i file: chiudo la
-			// connessione.ensione minima
-			long dimFile = file.length();
+            socketDataIn = new DataInputStream(socketIn);
+            socketDataOut = new DataOutputStream(socketOut);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(SOCKET_CONN_ERR);
+        }
 
-			if (dimFile > dimensioneSoglia) {
-				// Posso inviare la richesta
-				try {
-					socketDataOut.writeUTF(file.getName());
-				} catch (IOException e) {
-					// Non riesco a inviare la richiesta continuo alla prossima.
-					e.printStackTrace();
-					continue;
-				}
+        for (File file : files) {
+            // Per ogni file verifico la dimHo finito di inviare i file: chiudo la
+            // connessione.ensione minima
+            long dimFile = file.length();
 
-				// Ricevo risposta
-				try {
-					risposta = socketDataIn.readUTF();
-				} catch (IOException e) {
-					// Errore lettura salto
-					e.printStackTrace();
-					continue;
-				}
+            if (dimFile > dimensioneSoglia) {
+                // Posso inviare la richesta
+                try {
+                    socketDataOut.writeUTF(file.getName());
+                } catch (IOException e) {
+                    // Non riesco a inviare la richiesta continuo alla prossima.
+                    e.printStackTrace();
+                    continue;
+                }
 
-				// Decodifico la risposta
-				if (RESULT_ATTIVA.equalsIgnoreCase(risposta)) {
+                // Ricevo risposta
+                try {
+                    risposta = socketDataIn.readUTF();
+                } catch (IOException e) {
+                    // Errore lettura salto
+                    e.printStackTrace();
+                    continue;
+                }
 
-					// Invio lunghezza file
-					try {
-						socketDataOut.writeLong(dimFile);
-					} catch (IOException e) {
-						// Perché esco:
-						// Il server non ricevendo la lunghezza del file, andrà in attesa fino a scadere
-						// timeout.
-						e.printStackTrace();
-						System.exit(IO_ERR);
-					}
+                // Decodifico la risposta
+                if (RESULT_ATTIVA.equalsIgnoreCase(risposta)) {
 
-					// Posso inviare il file.
-					try (InputStreamReader inFile = new FileReader(file)) {
-						int tmpByte;
-						while ((tmpByte = inFile.read()) >= 0)
-							socketOut.write(tmpByte);
+                    // Invio lunghezza file
+                    try {
+                        socketDataOut.writeLong(dimFile);
+                    } catch (IOException e) {
+                        // Perché esco:
+                        // Il server non ricevendo la lunghezza del file, andrà in attesa fino a scadere
+                        // timeout.
+                        e.printStackTrace();
+                        System.exit(IO_ERR);
+                    }
 
-					} catch (FileNotFoundException ex) {
-						System.exit(FILE_NOT_EXISTS_ERR);
-					} catch (IOException ex) {
-						// Perché esco:
-						// Il server non ricevendo tutti i byte del file, andrà in attesa fino a scadere
-						// timeout.
-						ex.printStackTrace();
-						System.exit(IO_ERR);
-					}
+                    // Posso inviare il file.
+                    try (InputStreamReader inFile = new FileReader(file)) {
+                        int tmpByte;
+                        while ((tmpByte = inFile.read()) >= 0)
+                            socketOut.write(tmpByte);
 
-					// Ricevo ACK da server.ì
-					try {
-						risposta = socketDataIn.readUTF();
-					} catch (IOException e) {
-						// Errore lettura salto
-						e.printStackTrace();
-						continue;
-					}
+                    } catch (FileNotFoundException ex) {
+                        System.exit(FILE_NOT_EXISTS_ERR);
+                    } catch (IOException ex) {
+                        // Perché esco:
+                        // Il server non ricevendo tutti i byte del file, andrà in attesa fino a scadere
+                        // timeout.
+                        ex.printStackTrace();
+                        System.exit(IO_ERR);
+                    }
 
-					if (RESULT_OK.equalsIgnoreCase(risposta)) {
-						System.out.println("File " + file.getName() + " caricato.");
-					} else {
-						System.out.println("Errore nell'invio " + file.getName() + ": " + risposta);
-					}
+                    // Ricevo ACK da server.ì
+                    try {
+                        risposta = socketDataIn.readUTF();
+                    } catch (IOException e) {
+                        // Errore lettura salto
+                        e.printStackTrace();
+                        continue;
+                    }
 
-				}
-			}
-		}
+                    if (RESULT_OK.equalsIgnoreCase(risposta)) {
+                        System.out.println("File " + file.getName() + " caricato.");
+                    } else {
+                        System.out.println("Errore nell'invio " + file.getName() + ": " + risposta);
+                    }
 
-		// Ho finito di inviare i file: chiudo la connessione.
-		try {
-			socket.shutdownOutput();						//Non invio più nulla.
-			System.out.println(socketDataIn.readUTF());		//Attendo una conferma chiusura.
-			socket.shutdownInput();							//Chiudo l'input.
-			socket.close();									//Rilascio risorse.
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.exit(IO_ERR);
-		}
+                }
+            }
+        }
 
-	}
+        // Ho finito di inviare i file: chiudo la connessione.
+        try {
+            socket.shutdownOutput();                        //Non invio più nulla.
+            System.out.println(socketDataIn.readUTF());        //Attendo una conferma chiusura.
+            socket.shutdownInput();                            //Chiudo l'input.
+            socket.close();                                    //Rilascio risorse.
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(IO_ERR);
+        }
 
-	public static void main(String[] args) {
-		// MultiplePutClient serverAddress serverPort dimSoglia
+    }
 
-		if(args.length != 4) {
-			System.err.println("usage java MultiplePutClient serverAddress serverPort dimSoglia");
-			System.exit(ARGS_ERR);
-		}
+    public static void main(String[] args) {
+        // MultiplePutClient serverAddress serverPort dimSoglia
 
-		MultiplePutClient client = null;
+        if (args.length != 4) {
+            System.err.println("usage java MultiplePutClient serverAddress serverPort dimSoglia");
+            System.exit(ARGS_ERR);
+        }
 
-		try {
-			client = new MultiplePutClient(args[0], Integer.parseInt(args[1]), Integer.parseInt(args[3]));
-		} catch (IllegalArgumentException | IOException e) {
-			e.printStackTrace();
-			System.exit(ARGS_ERR);
-		}
+        MultiplePutClient client = null;
 
-		//Posso avviare il client
-		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-		String dirname = "";
-		try {
-			while ((dirname = in.readLine()) != null) {
-				client.esegui(dirname);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.exit(IO_ERR);
-		}
+        try {
+            client = new MultiplePutClient(args[0], Integer.parseInt(args[1]), Integer.parseInt(args[3]));
+        } catch (IllegalArgumentException | IOException e) {
+            e.printStackTrace();
+            System.exit(ARGS_ERR);
+        }
 
-		//chiudo il canale di lettura da stdin
-		try {
-			in.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		System.exit(0);
-	}
-	
-	
+        //Posso avviare il client
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+        String dirname = "";
+        try {
+            while ((dirname = in.readLine()) != null) {
+                client.esegui(dirname);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(IO_ERR);
+        }
+
+        //chiudo il canale di lettura da stdin
+        try {
+            in.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        System.exit(0);
+    }
+
+
 }

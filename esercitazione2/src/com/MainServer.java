@@ -17,20 +17,26 @@ public class MainServer {
     3) Delego la socket creata per la specifica connessione ad un mio figlio
      */
 
+    //Ho bisogno di una struttura per tenere in conto i file in trasferimento:
+    //Mettiamo caso che un thread faccia la exists, restituisce false e va in wait.
+    //Un altro thread fa anche lui la exists e restituisce false: Tutti i due thread vedono il file non esistente.
+    //Risultato: uno dei due restituirà probabilmente eccezione.
+
     //MainServer [porta]
 
     public static void main(String[] args) throws IOException {
         int port = -1;
 
-        if(args.length == 1){
+        if (args.length == 1) {
             port = Integer.parseInt(args[0]);
-        } else if(args.length == 0) {
+        } else if (args.length == 0) {
             port = PORT;
         } else {
             throw new IOException();
         }
 
         ServerSocket serverSocket = null;
+
         try {
             serverSocket = new ServerSocket(port);
             serverSocket.setReuseAddress(true);
@@ -38,18 +44,20 @@ public class MainServer {
             System.exit(NET_ERR);
         }
 
+        FileMonitor monitor = new FileMonitor();
+
         try {
-            while(true){
+            while (true) {
                 Socket client = null;
                 client = serverSocket.accept();
-                new ServiceChild(client).start();
+                new ServiceChild(client, monitor).start();
             }
         } catch (IOException e) {
             System.out.println("Problemi durante la connessione con il client");
             System.exit(NET_ERR);
         }
 
-        
+
     }
 
 }

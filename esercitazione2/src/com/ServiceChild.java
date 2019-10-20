@@ -23,18 +23,20 @@ import java.nio.file.Path;
 public class ServiceChild extends Thread {
 
     // Risposte da inviare al client
-	private static final String RESULT_ATTIVA = "attiva";
-	private static final String RESULT_SALTA_FILE = "salta file";
+    private static final String RESULT_ATTIVA = "attiva";
+    private static final String RESULT_SALTA_FILE = "salta file";
     private static final String RESULT_OK = "OK";
-    
+
     // Codici errore
     private static final int SOCK_ERR = 1;
-    private static final int NET_ERR = 2; 
+    private static final int NET_ERR = 2;
 
     private Socket client = null;
+    private FileMonitor monitor;
 
-    public ServiceChild(Socket client){
+    public ServiceChild(Socket client, FileMonitor monitor) {
         this.client = client;
+        this.monitor = monitor;
     }
 
     //PROTOCOLLO
@@ -44,12 +46,12 @@ public class ServiceChild extends Thread {
     // 4) se tutto ok invia OK
 
     @Override
-    public void run(){
+    public void run() {
         DataInputStream inSocket = null;
         DataOutputStream outSocket = null;
 
         String nomeCurrFile = "";
-        
+
         try {
             inSocket = new DataInputStream(client.getInputStream());
             outSocket = new DataOutputStream(client.getOutputStream());
@@ -62,29 +64,37 @@ public class ServiceChild extends Thread {
 
         try {
             while ((nomeCurrFile = inSocket.readUTF()) != null) {
-                if (!Files.exists(Path.of(new File(nomeCurrFile).toURI()))) { //se il file non esiste il server richiede il trasf.
-                    outSocket.writeUTF(RESULT_ATTIVA);
+                //Tento di aprire il file nel monitor.
+                if (monitor.openFile(nomeCurrFile)) {
+                    if (!Files.exists(Path.of(new File(nomeCurrFile).toURI()))) { //se il file non esiste il server richiede il trasf.
+                        outSocket.writeUTF(RESULT_ATTIVA);
 
-                    //da questo in poi il protocollo procede inviando dimensione prima e file dopo
-                    long dim = -1;
-                    dim = inSocket.readLong();
+                        //da questo in poi il protocollo procede inviando dimensione prima e file dopo
+                        long dim = -1;
+                        dim = inSocket.readLong();
 
-                    //Creo il file nel fs nella directory corrente
-                    try(BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(nomeCurrFile))){
-                        for (int i = 0; i < dim; i++) {
-                            bufferedWriter.write(inSocket.read());
+                        //Creo il file nel fs nella directory corrente
+                        try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(nomeCurrFile))) {
+                            for (int i = 0; i < dim; i++) {
+                                bufferedWriter.write(inSocket.read());
+                            }
+                        } catch (IOException e) {
+                            String err = "Errore nel creare il file: " + e.getMessage();
+                            System.err.println(err);
+                            //oltre a dire questo comunico anche al mio cliente che la trasmissione non è andata a buon fine
+                            outSocket.writeUTF("FAILED");
+                            continue;
                         }
-                    } catch(IOException e) {
-                        String err = "Errore nel creare il file: " + e.getMessage();
-                        System.err.println(err);
-                        //oltre a dire questo comunico anche al mio cliente che la trasmissione non è andata a buon fine
-                        outSocket.writeUTF("FAILED");
-                        continue;
+
+                        //la comunicazione è andata a buon fine! comunico al cliente!
+                        outSocket.writeUTF(RESULT_OK);
+
+                    } else { //altrimenti il file è gia presente nel fs --> salta file
+                        outSocket.writeUTF(RESULT_SALTA_FILE);
                     }
 
-                    //la comunicazione è andata a buon fine! comunico al cliente!
-                    outSocket.writeUTF(RESULT_OK);
-                
+                    //Chiudo il file aperto nel monitor.
+                    monitor.closeFile(nomeCurrFile);
                 } else { //altrimenti il file è gia presente nel fs --> salta file
                     outSocket.writeUTF(RESULT_SALTA_FILE);
                 }
