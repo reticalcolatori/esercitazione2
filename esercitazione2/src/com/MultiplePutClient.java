@@ -6,7 +6,6 @@ import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -30,25 +29,25 @@ public class MultiplePutClient {
     private static final int ARGS_ERR = 4; // Errore negli argomenti
 
     // Invocazione client:
-    // MultiplePutClient serverAddress serverPort dirname dimSoglia
+    // MultiplePutClient serverAddress serverPort dimSoglia
 
-    // Il client trasferisce solo se il file supera una dimensione minima.
-    // Protocollo richiesta put file:
-    // nomefile
+	// Il client trasferisce solo se il file supera una dimensione minima.
+	// Protocollo richiesta put file:
+	// 1) invio nomefile
 
-    // In ricezione ho una conferma: se positiva posso trasferire il file.
-    // L'esito è positivo solo se nel direttorio corrente del server non è presente
-    // un file con nome uguale.
-    // Il server rimane sullo stesso direttorio.
+	// 2) In ricezione ho una conferma: se positiva posso trasferire il file.
+	// L'esito è positivo solo se nel direttorio corrente del server non è presente
+	// un file con nome uguale.
+	// Il server rimane sullo stesso direttorio.
 
-    // Invio la lunghezza
-    // lunghezza(long)
+	// 3)Invio la lunghezza
+	// lunghezza(long)
 
-    // Il server invia un ACK
+	// 4)Il server invia un ACK
 
-    // Quando ho finito di inviare tutti i file (anche 0) faccio la shutdown di
-    // output.
-    // Il server invierà una conferma.
+	// 5)Quando ho finito di inviare tutti i file (anche 0) faccio la shutdown di
+	// output.
+	// 6)Il server invierà una conferma.
 
     // Risposte dal server
     private static final String RESULT_ATTIVA = "attiva";
@@ -82,14 +81,14 @@ public class MultiplePutClient {
 
         this.dimensioneSoglia = dimensioneSoglia;
 
-        if (dimensioneSoglia <= 0)
+        if (dimensioneSoglia < 0)
             throw new IllegalArgumentException("dimensioneSoglia non valida (<0)");
 
     }
 
     public void esegui(String dirname) {
 
-        // Apro la directory e faccio la ls.
+        // Apro la directory e e recupero un array dei files
         File dirFile = new File(dirname);
         Path dirPath = Paths.get(dirFile.toURI());
 
@@ -108,6 +107,7 @@ public class MultiplePutClient {
             return;
         }
 
+        //preparo strutture input/output
         Socket socket = null;
         BufferedInputStream socketIn = null;
         BufferedOutputStream socketOut = null;
@@ -126,13 +126,13 @@ public class MultiplePutClient {
             socketDataIn = new DataInputStream(socketIn);
             socketDataOut = new DataOutputStream(socketOut);
         } catch (IOException e) {
+            // se ho IOExeption devo terminare
             e.printStackTrace();
             System.exit(SOCKET_CONN_ERR);
         }
 
         for (File file : files) {
-            // Per ogni file verifico la dimHo finito di inviare i file: chiudo la
-            // connessione.ensione minima
+            // Per ogni file verifico se la dimensione supera la soglia minima
             long dimFile = file.length();
 
             if (dimFile > dimensioneSoglia) {
@@ -161,9 +161,8 @@ public class MultiplePutClient {
                     try {
                         socketDataOut.writeLong(dimFile);
                     } catch (IOException e) {
-                        // Perché esco:
-                        // Il server non ricevendo la lunghezza del file, andrà in attesa fino a scadere
-                        // timeout.
+                        // Perché esco?
+                        // Il server, non ricevendo la lunghezza del file, andrà in attesa fino a timeout
                         e.printStackTrace();
                         System.exit(IO_ERR);
                     }
@@ -174,12 +173,9 @@ public class MultiplePutClient {
                         while ((tmpByte = inFile.read()) >= 0)
                             socketOut.write(tmpByte);
 
-                    } catch (FileNotFoundException ex) {
-                        System.exit(FILE_NOT_EXISTS_ERR);
                     } catch (IOException ex) {
-                        // Perché esco:
-                        // Il server non ricevendo tutti i byte del file, andrà in attesa fino a scadere
-                        // timeout.
+                        // Perché esco?
+                        // Il server, non ricevendo tutti i byte del file, andrà in attesa fino a timeout
                         ex.printStackTrace();
                         System.exit(IO_ERR);
                     }
@@ -193,6 +189,9 @@ public class MultiplePutClient {
                         continue;
                     }
 
+                    // La nostra non è solo una scelta (furba tra l'altro), ma è proprio
+                    // una specifica: "Il Multiple put viene effettuato file
+                    // per file con assenso del server per ogni file" !!
                     if (RESULT_OK.equalsIgnoreCase(risposta)) {
                         System.out.println("File " + file.getName() + " caricato.");
                     } else {
@@ -238,6 +237,7 @@ public class MultiplePutClient {
         String dirname = "";
         try {
             while ((dirname = in.readLine()) != null) {
+                //Client.esegui viene chiamata più volte.
                 client.esegui(dirname);
             }
         } catch (IOException e) {
@@ -251,7 +251,6 @@ public class MultiplePutClient {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.exit(0);
     }
 
 
