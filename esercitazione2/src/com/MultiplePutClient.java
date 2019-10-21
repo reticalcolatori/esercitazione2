@@ -58,163 +58,6 @@ public class MultiplePutClient {
         return 1024 < port && port < 0x10000;
     }
 
-    // Variabili per il direttorio.
-
-    private final int dimensioneSoglia;
-
-    private final InetAddress serverAddress;
-    private final int serverPort;
-
-    public MultiplePutClient(String serverAddress, int serverPort, int dimensioneSoglia)
-            throws IllegalArgumentException, IOException {
-        this(InetAddress.getByName(serverAddress), serverPort, dimensioneSoglia);
-    }
-
-    public MultiplePutClient(InetAddress serverAddress, int serverPort, int dimensioneSoglia)
-            throws IllegalArgumentException, IOException {
-        this.serverAddress = serverAddress;
-        this.serverPort = serverPort;
-
-        // Controllo porta.
-        if (!isPortValid(serverPort))
-            throw new IllegalArgumentException("server port non valida");
-
-        this.dimensioneSoglia = dimensioneSoglia;
-
-        if (dimensioneSoglia < 0)
-            throw new IllegalArgumentException("dimensioneSoglia non valida (<0)");
-
-    }
-
-    public void esegui(String dirname) {
-
-        // Apro la directory e e recupero un array dei files
-        File dirFile = new File(dirname);
-        Path dirPath = Paths.get(dirFile.toURI());
-
-        // Controllo directory.
-        if (!dirFile.isDirectory()) {
-            System.out.println("Directory non valida");
-            return;
-        }
-
-        // Estraggo i file contenuti nella directory
-        File[] files = dirFile.listFiles();
-
-        // Directory vuota non devo fare nulla.
-        if (files.length == 0) {
-            System.out.println("Directory vuota, non eseguo trasferimenti.");
-            return;
-        }
-
-        //preparo strutture input/output
-        Socket socket = null;
-        BufferedInputStream socketIn = null;
-        BufferedOutputStream socketOut = null;
-
-        DataInputStream socketDataIn = null;
-        DataOutputStream socketDataOut = null;
-
-        String risposta = null;
-
-        // Apro la connessione
-        try {
-            socket = new Socket(serverAddress, serverPort);
-            socketIn = new BufferedInputStream(socket.getInputStream());
-            socketOut = new BufferedOutputStream(socket.getOutputStream());
-
-            socketDataIn = new DataInputStream(socketIn);
-            socketDataOut = new DataOutputStream(socketOut);
-        } catch (IOException e) {
-            // se ho IOExeption devo terminare
-            e.printStackTrace();
-            System.exit(SOCKET_CONN_ERR);
-        }
-
-        for (File file : files) {
-            // Per ogni file verifico se la dimensione supera la soglia minima
-            long dimFile = file.length();
-
-            if (dimFile > dimensioneSoglia) {
-                // Posso inviare la richesta
-                try {
-                    socketDataOut.writeUTF(file.getName());
-                } catch (IOException e) {
-                    // Non riesco a inviare la richiesta continuo alla prossima.
-                    e.printStackTrace();
-                    continue;
-                }
-
-                // Ricevo risposta
-                try {
-                    risposta = socketDataIn.readUTF();
-                } catch (IOException e) {
-                    // Errore lettura salto
-                    e.printStackTrace();
-                    continue;
-                }
-
-                // Decodifico la risposta
-                if (RESULT_ATTIVA.equalsIgnoreCase(risposta)) {
-
-                    // Invio lunghezza file
-                    try {
-                        socketDataOut.writeLong(dimFile);
-                    } catch (IOException e) {
-                        // Perché esco?
-                        // Il server, non ricevendo la lunghezza del file, andrà in attesa fino a timeout
-                        e.printStackTrace();
-                        System.exit(IO_ERR);
-                    }
-
-                    // Posso inviare il file.
-                    try (InputStreamReader inFile = new FileReader(file)) {
-                        int tmpByte;
-                        while ((tmpByte = inFile.read()) >= 0)
-                            socketOut.write(tmpByte);
-
-                    } catch (IOException ex) {
-                        // Perché esco?
-                        // Il server, non ricevendo tutti i byte del file, andrà in attesa fino a timeout
-                        ex.printStackTrace();
-                        System.exit(IO_ERR);
-                    }
-
-                    // Ricevo ACK da server.ì
-                    try {
-                        risposta = socketDataIn.readUTF();
-                    } catch (IOException e) {
-                        // Errore lettura salto
-                        e.printStackTrace();
-                        continue;
-                    }
-
-                    // La nostra non è solo una scelta (furba tra l'altro), ma è proprio
-                    // una specifica: "Il Multiple put viene effettuato file
-                    // per file con assenso del server per ogni file" !!
-                    if (RESULT_OK.equalsIgnoreCase(risposta)) {
-                        System.out.println("File " + file.getName() + " caricato.");
-                    } else {
-                        System.out.println("Errore nell'invio " + file.getName() + ": " + risposta);
-                    }
-
-                }
-            }
-        }
-
-        // Ho finito di inviare i file: chiudo la connessione.
-        try {
-            socket.shutdownOutput();                        //Non invio più nulla.
-            System.out.println(socketDataIn.readUTF());        //Attendo una conferma chiusura.
-            socket.shutdownInput();                            //Chiudo l'input.
-            socket.close();                                    //Rilascio risorse.
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(IO_ERR);
-        }
-
-    }
-
     public static void main(String[] args) {
         // MultiplePutClient serverAddress serverPort dimSoglia
 
@@ -223,12 +66,29 @@ public class MultiplePutClient {
             System.exit(ARGS_ERR);
         }
 
-        MultiplePutClient client = null;
+        int dimensioneSoglia = 0;
+
+        InetAddress serverAddress = null;
+        int serverPort = 0;
 
         try {
-            client = new MultiplePutClient(args[0], Integer.parseInt(args[1]), Integer.parseInt(args[3]));
+            serverAddress = InetAddress.getByName(args[0]);
+            serverPort = Integer.parseInt(args[1]);
+            dimensioneSoglia = Integer.parseInt(args[3]);
+
         } catch (IllegalArgumentException | IOException e) {
             e.printStackTrace();
+            System.exit(ARGS_ERR);
+        }
+
+        //Checks
+        if (!isPortValid(serverPort)){
+            System.err.println(("server port non valida"));
+            System.exit(ARGS_ERR);
+        }
+
+        if (dimensioneSoglia < 0){
+            System.err.println(("dimensioneSoglia non valida (<0)"));
             System.exit(ARGS_ERR);
         }
 
@@ -237,8 +97,130 @@ public class MultiplePutClient {
         String dirname = "";
         try {
             while ((dirname = in.readLine()) != null) {
-                //Client.esegui viene chiamata più volte.
-                client.esegui(dirname);
+                // Apro la directory e e recupero un array dei files
+                File dirFile = new File(dirname);
+                Path dirPath = Paths.get(dirFile.toURI());
+
+                // Controllo directory.
+                if (!dirFile.isDirectory()) {
+                    System.out.println("Directory non valida");
+                    return;
+                }
+
+                // Estraggo i file contenuti nella directory
+                File[] files = dirFile.listFiles();
+
+                // Directory vuota non devo fare nulla.
+                if (files.length == 0) {
+                    System.out.println("Directory vuota, non eseguo trasferimenti.");
+                    return;
+                }
+
+                //preparo strutture input/output
+                Socket socket = null;
+                BufferedInputStream socketIn = null;
+                BufferedOutputStream socketOut = null;
+
+                DataInputStream socketDataIn = null;
+                DataOutputStream socketDataOut = null;
+
+                String risposta = null;
+
+                // Apro la connessione
+                try {
+                    socket = new Socket(serverAddress, serverPort);
+                    socketIn = new BufferedInputStream(socket.getInputStream());
+                    socketOut = new BufferedOutputStream(socket.getOutputStream());
+
+                    socketDataIn = new DataInputStream(socketIn);
+                    socketDataOut = new DataOutputStream(socketOut);
+                } catch (IOException e) {
+                    // se ho IOExeption devo terminare
+                    e.printStackTrace();
+                    System.exit(SOCKET_CONN_ERR);
+                }
+
+                for (File file : files) {
+                    // Per ogni file verifico se la dimensione supera la soglia minima
+                    long dimFile = file.length();
+
+                    if (dimFile > dimensioneSoglia) {
+                        // Posso inviare la richesta
+                        try {
+                            socketDataOut.writeUTF(file.getName());
+                        } catch (IOException e) {
+                            // Non riesco a inviare la richiesta continuo alla prossima.
+                            e.printStackTrace();
+                            continue;
+                        }
+
+                        // Ricevo risposta
+                        try {
+                            risposta = socketDataIn.readUTF();
+                        } catch (IOException e) {
+                            // Errore lettura salto
+                            e.printStackTrace();
+                            continue;
+                        }
+
+                        // Decodifico la risposta
+                        if (RESULT_ATTIVA.equalsIgnoreCase(risposta)) {
+
+                            // Invio lunghezza file
+                            try {
+                                socketDataOut.writeLong(dimFile);
+                            } catch (IOException e) {
+                                // Perché esco?
+                                // Il server, non ricevendo la lunghezza del file, andrà in attesa fino a timeout
+                                e.printStackTrace();
+                                System.exit(IO_ERR);
+                            }
+
+                            // Posso inviare il file.
+                            try (InputStreamReader inFile = new FileReader(file)) {
+                                int tmpByte;
+                                while ((tmpByte = inFile.read()) >= 0)
+                                    socketOut.write(tmpByte);
+
+                            } catch (IOException ex) {
+                                // Perché esco?
+                                // Il server, non ricevendo tutti i byte del file, andrà in attesa fino a timeout
+                                ex.printStackTrace();
+                                System.exit(IO_ERR);
+                            }
+
+                            // Ricevo ACK da server.ì
+                            try {
+                                risposta = socketDataIn.readUTF();
+                            } catch (IOException e) {
+                                // Errore lettura salto
+                                e.printStackTrace();
+                                continue;
+                            }
+
+                            // La nostra non è solo una scelta (furba tra l'altro), ma è proprio
+                            // una specifica: "Il Multiple put viene effettuato file
+                            // per file con assenso del server per ogni file" !!
+                            if (RESULT_OK.equalsIgnoreCase(risposta)) {
+                                System.out.println("File " + file.getName() + " caricato.");
+                            } else {
+                                System.out.println("Errore nell'invio " + file.getName() + ": " + risposta);
+                            }
+
+                        }
+                    }
+                }
+
+                // Ho finito di inviare i file: chiudo la connessione.
+                try {
+                    socket.shutdownOutput();                        //Non invio più nulla.
+                    System.out.println(socketDataIn.readUTF());        //Attendo una conferma chiusura.
+                    socket.shutdownInput();                            //Chiudo l'input.
+                    socket.close();                                    //Rilascio risorse.
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    System.exit(IO_ERR);
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();

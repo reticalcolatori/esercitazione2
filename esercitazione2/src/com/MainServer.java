@@ -7,8 +7,13 @@ import java.net.Socket;
 public class MainServer {
 
     private static final int NET_ERR = 1;
+    private static final int ARGS_ERR = 2;
 
     public static final int PORT = 4444;
+
+    private static boolean isPortValid(int port) {
+        return 1024 < port && port < 0x10000;
+    }
 
     /*
     STRUTTURA:
@@ -28,11 +33,23 @@ public class MainServer {
         int port = -1;
 
         if (args.length == 1) {
-            port = Integer.parseInt(args[0]);
+            try{
+                port = Integer.parseInt(args[0]);
+            }catch (NumberFormatException ex){
+                System.err.println("Usage: MainServer [port]");
+                System.exit(ARGS_ERR);
+            }
         } else if (args.length == 0) {
             port = PORT;
         } else {
-            throw new IOException();
+            System.err.println("Usage: MainServer [port]");
+            System.exit(ARGS_ERR);
+        }
+
+        //Check porta (Issue 2)
+        if(!isPortValid(port)){
+            System.err.println("Invalid port");
+            System.exit(ARGS_ERR);
         }
 
         ServerSocket serverSocket = null;
