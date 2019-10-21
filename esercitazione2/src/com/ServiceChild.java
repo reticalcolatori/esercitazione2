@@ -60,6 +60,7 @@ public class ServiceChild extends Thread {
             //Non esco perchè ho una grossa perdita.
             //Meglio che fallisca il thread che l'intero processo.
             //System.exit(SOCK_ERR);
+            return;
         }
 
         try {
