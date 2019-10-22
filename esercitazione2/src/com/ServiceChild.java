@@ -66,6 +66,15 @@ public class ServiceChild extends Thread {
         try {
             while ((nomeCurrFile = inSocket.readUTF()) != null) {
                 //Tento di aprire il file nel monitor.
+            
+//--------------------------------------------------------------------------------------------------------------------------
+//Qua anzichè avere la necessità di istanziare una classe che funga il ruolo di monitor potrei più semplicemente
+//aggiungere un blocco di istruzioni syncronyzed che mi assicura che verranno eseguite insieme e nel caso in cui 
+//si ricorra nel problema precedente sicuramente il primo client invia e finisce la sua richiesta e se non presente sul 
+//fs del server, il server procede già a crearlo in modo tale che non appena arrivi il secondo cliente, trovi il file già 
+//allocato if(Files.exists()) ritorna VERO!
+//--------------------------------------------------------------------------------------------------------------------------
+
                 if (monitor.openFile(nomeCurrFile)) {
                     if (!Files.exists(Path.of(new File(nomeCurrFile).toURI()))) { //se il file non esiste il server richiede il trasf.
                         outSocket.writeUTF(RESULT_ATTIVA);
@@ -93,6 +102,10 @@ public class ServiceChild extends Thread {
                     } else { //altrimenti il file è gia presente nel fs --> salta file
                         outSocket.writeUTF(RESULT_SALTA_FILE);
                     }
+
+//--------------------------------------------------------------------------------------------------------------------------
+//Qua andrebbe chiuso il fatidico blocco syncronized di cui parlavo prima
+//--------------------------------------------------------------------------------------------------------------------------
 
                     //Chiudo il file aperto nel monitor.
                     monitor.closeFile(nomeCurrFile);

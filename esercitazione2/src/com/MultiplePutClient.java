@@ -1,7 +1,5 @@
 package com;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -11,8 +9,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 
 //Risassuntino per la presentazione:
@@ -24,7 +20,6 @@ import java.nio.file.Paths;
 public class MultiplePutClient {
 
     private static final int SOCKET_CONN_ERR = 1; // Connessione non andata a buon fine.
-    private static final int FILE_NOT_EXISTS_ERR = 2; // File non trovato
     private static final int IO_ERR = 3; // Errore IO
     private static final int ARGS_ERR = 4; // Errore negli argomenti
 
@@ -51,7 +46,8 @@ public class MultiplePutClient {
 
     // Risposte dal server
     private static final String RESULT_ATTIVA = "attiva";
-    private static final String RESULT_SALTA_FILE = "salta file";
+    //private static final String RESULT_SALTA_FILE = "salta file"; --> concettualmente giusta così in pratica never used!
+    //nonostante il server la usi! (è inclusa nel ramo else)
     private static final String RESULT_OK = "OK";
 
     private static boolean isPortValid(int port) {
@@ -99,7 +95,6 @@ public class MultiplePutClient {
             while ((dirname = in.readLine()) != null) {
                 // Apro la directory e e recupero un array dei files
                 File dirFile = new File(dirname);
-                Path dirPath = Paths.get(dirFile.toURI());
 
                 // Controllo directory.
                 if (!dirFile.isDirectory()) {
@@ -118,8 +113,6 @@ public class MultiplePutClient {
 
                 //preparo strutture input/output
                 Socket socket = null;
-                BufferedInputStream socketIn = null;
-                BufferedOutputStream socketOut = null;
 
                 DataInputStream socketDataIn = null;
                 DataOutputStream socketDataOut = null;
@@ -129,11 +122,8 @@ public class MultiplePutClient {
                 // Apro la connessione
                 try {
                     socket = new Socket(serverAddress, serverPort);
-                    socketIn = new BufferedInputStream(socket.getInputStream());
-                    socketOut = new BufferedOutputStream(socket.getOutputStream());
-
-                    socketDataIn = new DataInputStream(socketIn);
-                    socketDataOut = new DataOutputStream(socketOut);
+                    socketDataIn = new DataInputStream(socket.getInputStream());
+                    socketDataOut = new DataOutputStream(socket.getOutputStream());
                 } catch (IOException e) {
                     // se ho IOExeption devo terminare
                     e.printStackTrace();
@@ -153,6 +143,12 @@ public class MultiplePutClient {
                             e.printStackTrace();
                             continue;
                         }
+//-----------------------------------------------------------------------------------------------------------------------------
+//qua si incorre nel problema se io faccio una richiesta qua e vengo successivamente deschedulato si potrebbe
+//cascare nel problema che più clienti inizino a trasferire verso il server contemporameamente due file distinti
+//con lo stesso identificativo!
+
+//----------------------------------------------------------------------------------------------------------------------------
 
                         // Ricevo risposta
                         try {
@@ -180,7 +176,7 @@ public class MultiplePutClient {
                             try (InputStreamReader inFile = new FileReader(file)) {
                                 int tmpByte;
                                 while ((tmpByte = inFile.read()) >= 0)
-                                    socketOut.write(tmpByte);
+                                    socketDataOut.write(tmpByte);
 
                             } catch (IOException ex) {
                                 // Perché esco?
@@ -213,7 +209,7 @@ public class MultiplePutClient {
 
                 // Ho finito di inviare i file: chiudo la connessione.
                 try {
-                    socket.shutdownOutput();                        //Non invio più nulla.
+                    socket.shutdownOutput();                           //Non invio più nulla.
                     System.out.println(socketDataIn.readUTF());        //Attendo una conferma chiusura.
                     socket.shutdownInput();                            //Chiudo l'input.
                     socket.close();                                    //Rilascio risorse.
