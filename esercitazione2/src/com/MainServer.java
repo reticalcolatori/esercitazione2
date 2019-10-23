@@ -61,7 +61,7 @@ public class MainServer {
             System.exit(NET_ERR);
         }
 
-        FileMonitor monitor = new FileMonitor();
+        Object monitor = new Object();
 
         try {
             while (true) {

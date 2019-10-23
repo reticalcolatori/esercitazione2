@@ -32,9 +32,9 @@ public class ServiceChild extends Thread {
     private static final int NET_ERR = 2;
 
     private Socket client = null;
-    private FileMonitor monitor;
+    private Object monitor;
 
-    public ServiceChild(Socket client, FileMonitor monitor) {
+    public ServiceChild(Socket client, Object monitor) {
         this.client = client;
         this.monitor = monitor;
     }
@@ -66,7 +66,7 @@ public class ServiceChild extends Thread {
         try {
             while ((nomeCurrFile = inSocket.readUTF()) != null) {
                 //Tento di aprire il file nel monitor.
-            
+
 //--------------------------------------------------------------------------------------------------------------------------
 //Qua anzichè avere la necessità di istanziare una classe che funga il ruolo di monitor potrei più semplicemente
 //aggiungere un blocco di istruzioni syncronyzed che mi assicura che verranno eseguite insieme e nel caso in cui 
@@ -74,45 +74,54 @@ public class ServiceChild extends Thread {
 //fs del server, il server procede già a crearlo in modo tale che non appena arrivi il secondo cliente, trovi il file già 
 //allocato if(Files.exists()) ritorna VERO!
 //--------------------------------------------------------------------------------------------------------------------------
+                File myFile = new File(nomeCurrFile);
+                Path myPath = Path.of(myFile.toURI());
+                FileWriter fileWriter = null;
 
-                if (monitor.openFile(nomeCurrFile)) {
-                    if (!Files.exists(Path.of(new File(nomeCurrFile).toURI()))) { //se il file non esiste il server richiede il trasf.
-                        outSocket.writeUTF(RESULT_ATTIVA);
-
-                        //da questo in poi il protocollo procede inviando dimensione prima e file dopo
-                        long dim = -1;
-                        dim = inSocket.readLong();
-
-                        //Creo il file nel fs nella directory corrente
-                        try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(nomeCurrFile))) {
-                            for (int i = 0; i < dim; i++) {
-                                bufferedWriter.write(inSocket.read());
-                            }
-                        } catch (IOException e) {
-                            String err = "Errore nel creare il file: " + e.getMessage();
-                            System.err.println(err);
-                            //oltre a dire questo comunico anche al mio cliente che la trasmissione non è andata a buon fine
-                            outSocket.writeUTF("FAILED");
-                            continue;
-                        }
-
-                        //la comunicazione è andata a buon fine! comunico al cliente!
-                        outSocket.writeUTF(RESULT_OK);
-
-                    } else { //altrimenti il file è gia presente nel fs --> salta file
-                        outSocket.writeUTF(RESULT_SALTA_FILE);
+                synchronized (monitor) {
+                    if (!Files.exists(myPath)) { //se il file non esiste il server richiede il trasf.
+                        //Devo per forza creare e aprire il file qua dentro.
+                        Files.createFile(myPath);
+                        fileWriter = new FileWriter(myFile);
                     }
+                }
+
+
+                if (fileWriter != null) { //se il file non esiste il server richiede il trasf.
+                    outSocket.writeUTF(RESULT_ATTIVA);
+
+                    //da questo in poi il protocollo procede inviando dimensione prima e file dopo
+                    long dim = -1;
+                    dim = inSocket.readLong();
+
+                    //Creo il file nel fs nella directory corrente
+                    try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(nomeCurrFile))) {
+                        for (int i = 0; i < dim; i++) {
+                            bufferedWriter.write(inSocket.read());
+                        }
+                    } catch (IOException e) {
+                        String err = "Errore nel creare il file: " + e.getMessage();
+                        System.err.println(err);
+                        //oltre a dire questo comunico anche al mio cliente che la trasmissione non è andata a buon fine
+                        outSocket.writeUTF("FAILED");
+                        continue;
+                    }
+
+                    //la comunicazione è andata a buon fine! comunico al cliente!
+                    outSocket.writeUTF(RESULT_OK);
+
+                } else { //altrimenti il file è gia presente nel fs --> salta file
+                    outSocket.writeUTF(RESULT_SALTA_FILE);
+                }
+
+                //Chiudo fileWriter.
+                if(fileWriter != null) fileWriter.close();
 
 //--------------------------------------------------------------------------------------------------------------------------
 //Qua andrebbe chiuso il fatidico blocco syncronized di cui parlavo prima
 //--------------------------------------------------------------------------------------------------------------------------
-
-                    //Chiudo il file aperto nel monitor.
-                    monitor.closeFile(nomeCurrFile);
-                } else { //altrimenti il file è gia presente nel fs --> salta file
-                    outSocket.writeUTF(RESULT_SALTA_FILE);
-                }
             }
+
         } catch (IOException e) {
             System.err.println("Errore nella lettura del nome del file!");
             e.printStackTrace();
